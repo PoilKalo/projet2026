@@ -1,5 +1,7 @@
 $(document).ready(function(){
 
+    let roleUtilisateur = "";
+
     function showGlobalMessage(message,success){
 
         $("#globalMessage")
@@ -35,6 +37,8 @@ $(document).ready(function(){
 
             // Si l'utilisateur est connecté
             if(response.connected){
+
+                roleUtilisateur = response.role;
                 // Affiche les infos dans la page
                 $("#userInfo").text(
                     "Bonjour "
@@ -46,6 +50,10 @@ $(document).ready(function(){
                 // Si admin, afficher bouton admin
                 if(response.role === 'admin'){
                     $("#btnAdmin").removeClass("d-none");
+                }
+                
+                if(response.role === 'user'){
+                    $("#btnAjouterObjet").addClass("d-none");
                 }
 
             } else {
@@ -99,6 +107,29 @@ $(document).ready(function(){
                  * table-bordered : ajoute des bordures aux cellules
                  */
                 if(response.success){
+
+                    let colonneActions = "<th>Actions</th>";
+                    let boutonsActions = "";
+                    let colspan = 5;
+
+                    if(roleUtilisateur === "admin" || roleUtilisateur === "owner"){
+                        boutonsActions = `
+                                <button class="btn btn-warning btn-sm btnModifierObjet" data-id="\${objet.idObjet}">
+                                    Modifier
+                                </button>
+
+                                <button class="btn btn-danger btn-sm btnSupprimerObjet" data-id="\${objet.idObjet}">
+                                    Supprimer
+                                </button>
+                        `;
+                    }
+
+                    boutonsActions += `
+                        <button class="btn btn-success btn-sm btnPreterObjet" data-id="\${objet.idObjet}">
+                            Prêter
+                        </button>
+                    `;
+
                     let html = `
                     <div class="card shadow p-4">
                         <h2 class="text-center mb-4">Liste des objets</h2>
@@ -109,9 +140,10 @@ $(document).ready(function(){
                                     <tr>
                                         <th>Nom</th>
                                         <th>Catégorie</th>
-                                        <th>Statuts</th>
+                                        <th>Statut</th>
                                         <th>Infos</th>
-                                        <th>Actions</th>
+                                        <th>Photo</th>
+                                        ${colonneActions}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -119,6 +151,13 @@ $(document).ready(function(){
                     `;
                     if(response.objets.length > 0){
                         response.objets.forEach(function(objet){
+
+                            let photoObjet = "images/objets/default.jpg";
+                            if(objet.photo){
+                                photoObjet = "images/objets/" + objet.photo;
+                            }
+
+                            let boutons = boutonsActions.replaceAll("${objet.idObjet}", objet.idObjet);
                             html += `
                             <tr>
                                 <td>${objet.nomObjet}</td>
@@ -126,13 +165,13 @@ $(document).ready(function(){
                                 <td>${objet.statut}</td>
                                 <td>${objet.infoPlus ?? ""}</td>
                                 <td>
-                                    <button class="btn btn-warning btn-sm btnModifierObjet" data-id="${objet.idObjet}">
-                                        Modifier
-                                    </button>
-
-                                    <button class="btn btn-danger btn-sm btnSupprimerObjet" data-id="${objet.idObjet}">
-                                        Supprimer
-                                    </button>
+                                    <img src="${photoObjet}"
+                                    alt="Photo de ${objet.nomObjet}"
+                                    class="img-thumbnail"
+                                    style="width: 80px; height: 80px; object-fit: cover;">
+                                </td>
+                                <td>
+                                    ${boutons}
                                 </td>
                             </tr>
                             `;
@@ -140,7 +179,7 @@ $(document).ready(function(){
                     } else {
                         html += `
                         <tr>
-                            <td colspan="4" class="text-center">
+                            <td colspan="${colspan}" class="text-center">
                                 Aucun objet trouvé
                             </td>
                         </tr>
@@ -158,7 +197,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
 
                 $("#contenu").html(`
                     <div class="alert alert-danger text-center">
@@ -247,6 +285,16 @@ $(document).ready(function(){
                                 <input type="text" name="infoPlus" class="form-control">
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">Photo</label>
+                                <input type="text" 
+                                name="photo" 
+                                class="form-control" 
+                                placeholder="nom_image.jpg" 
+                                pattern=".*\\.jpg$" 
+                                title="Le fichier doit être au format .jpg">
+                            </div>
+
                             <button type="submit" class="btn btn-primary w-100">
                                 Ajouter
                             </button>
@@ -262,7 +310,7 @@ $(document).ready(function(){
 
     });
 
-    // ENVOIE FORMULAIRE OBJET 
+    //  FORMULAIRE OBJET 
     $(document).on("submit", "#formAjoutObjet", function(event){
 
         event.preventDefault();
@@ -282,7 +330,6 @@ $(document).ready(function(){
             },
 
             error:function(xhr){
-                console.log(xhr.responseText);
 
                 $("#messageAjout")
                 .addClass("text-danger")
@@ -346,6 +393,16 @@ $(document).ready(function(){
                                 </select>
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">Photo</label>
+                                <input type="text" 
+                                name="photo" 
+                                class="form-control" 
+                                value="${objet.photo ?? ''}" 
+                                pattern=".*\\.jpg$" 
+                                title="Le fichier doit être au format .jpg">
+                            </div>
+
                             <button type="submit" class="btn btn-primary w-100">
                                 Modifier
                             </button>
@@ -354,11 +411,9 @@ $(document).ready(function(){
                     </div>
                 `;
                 $("#contenu").html(html);
-            },
-
-            error: function(xhr){
-                console.log(xhr.responseText)
             }
+
+
         });
     });
 
@@ -382,7 +437,6 @@ $(document).ready(function(){
                     $("#btnObjet").click();   
                 }            },
             error: function(xhr){
-                console.log(xhr.responseText);
 
                 $("#messageModif")
                 .addClass("text-danger")
@@ -422,8 +476,7 @@ $(document).ready(function(){
                 }            
             },
             error: function(xhr){
-                console.log(xhr.responseText);
-                alert("Erreur lors de la suppression.");
+                showGlobalMessage("Erreur lors de la suppression.", false);
             }
         });
     });
@@ -445,22 +498,44 @@ $(document).ready(function(){
 
             success: function(response){
                 if(response.success){
+                    let btnAjouter = "";
+                    let colonneActions = "";
+                    let boutonsActions = "";
+                    let colspan = 2;
+
+                    if(roleUtilisateur === "admin" || roleUtilisateur === "owner"){
+                        colspan = 3;
+                        colonneActions = "<th>Actions</th>";
+                        boutonsActions = `
+                            <button class="btn btn-warning btn-sm btnModifierCategorie" data-id="\${categorie.idCategorie}">
+                                Modifier
+                            </button>
+
+                            <button class="btn btn-danger btn-sm btnSupprimerCategorie" data-id="\${categorie.idCategorie}">
+                                Supprimer
+                            </button>
+                        `;
+
+                        btnAjouter = `
+                            <div class="text-end mb-3">
+                                <button class="btn btn-primary" id="btnAjouterCategorie">   
+                                    Ajouter une catégorie
+                                </button>
+                            </div>
+                        `;
+                    }
                     let html = `
                         <div class="card shadow p-4">
                             <h2 class="text-center mb-4">Liste des catégories</h2>
 
-                            <div class="text-end mb-3">
-                                <button class="btn btn-primary" id="btnAjouterCategorie">
-                                    Ajouter une catégorie
-                                </button>
-                            </div>
+                            ${btnAjouter}
 
                                 <table class="table table-striped table-bordered">
                                     <thead class="table-primary">
                                         <tr>
                                             <th>Nom</th>
                                             <th>Infos</th>
-                                            <th>Actions</th>
+                                            ${colonneActions}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -468,18 +543,13 @@ $(document).ready(function(){
 
                     if(response.categories.length > 0){
                         response.categories.forEach(function(categorie){
+                            let boutons = boutonsActions.replaceAll("${categorie.idCategorie}", categorie.idCategorie);
                             html += `
                                 <tr>
                                     <td>${categorie.nom}</td>
                                     <td>${categorie.infoPlus ?? ""}</td>
                                     <td>
-                                        <button class="btn btn-warning btn-sm btnModifierCategorie" data-id="${categorie.idCategorie}">
-                                            Modifier
-                                        </button>
-
-                                        <button class="btn btn-danger btn-sm btnSupprimerCategorie" data-id="${categorie.idCategorie}">
-                                            Supprimer
-                                        </button>
+                                        ${boutons}
                                     </td>
                                 </tr>
                             `;
@@ -487,7 +557,7 @@ $(document).ready(function(){
                     } else {
                         html += `
                             <tr>
-                                <td collspan="2" class="text-center">
+                                <td colspan="${colspan}" class="text-center">
                                     Aucune catégorie trouvée
                                 </td>
                             </tr>
@@ -504,7 +574,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des catégories.", false);
             }
         });
@@ -556,7 +625,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de l'ajout d'une catégorie.", false);
             }
         });
@@ -638,7 +706,6 @@ $(document).ready(function(){
 
         event.preventDefault();
 
-        console.log("Bouton supprimé cliqué");
 
         let idCategorie = $(this).data("id");
 
@@ -662,7 +729,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la suppression de la catégorie.",false);
             }
         });
@@ -686,14 +752,35 @@ $(document).ready(function(){
             success: function(response){
 
                 if(response.success){
+                    let colonneActions = "";
+                    let btnAjouter = "";
+                    let boutonsActions = "";
+
+                    if(roleUtilisateur === "admin" || roleUtilisateur === "owner"){
+                        colonneActions = "<th>Actions</th>";
+                        boutonsActions = `
+                        <td>
+                            <button class="btn btn-warning btn-sm btnModifierSite" data-id="\${site.idSite}">
+                                Modifier
+                            </button>
+                            <button class="btn btn-danger btn-sm btnSupprimerSite" data-id="\${site.idSite}">
+                                Supprimer
+                            </button>
+                        </td>
+                        `;
+                        btnAjouter = `
+                        <div class="text-end mb-3">
+                            <button class="btn btn-primary" id="btnAjouterSite">
+                                Ajouter un site
+                            </button>
+                        </div>
+                        `;
+                    }
+
                     let html = `
                         <div class="card shadow p-4">
                             <h2 class="text-center mb-4">Liste des sites</h2>
-                            <div class="text-end mb-3">
-                                <button class="btn btn-primary" id="btnAjouterSite">
-                                    Ajouter un site
-                                </button>
-                            </div>
+                            ${btnAjouter}
 
                             <div class="table-responsive">
                                 <table class="table table-striped table-bordered">
@@ -702,14 +789,20 @@ $(document).ready(function(){
                                             <th>Nom</th>
                                             <th>Adresse</th>
                                             <th>Code postal</th>
-                                            <th>Localite</th>
-                                            <th>Actions</th>
+                                            <th>Localité</th>
+                                            <th>Photo</th>
+                                            ${colonneActions}
                                         </tr>
                                     </thead>
                                     <tbody>
                     `;
 
                     response.sites.forEach(function(site){
+                        let photoSite = "images/sites/default.jpg";
+                        let boutons = boutonsActions.replaceAll("${site.idSite}", site.idSite);
+                        if(site.photo){
+                            photoSite = "images/sites/" + site.photo;
+                        }
 
                         html+= `
                             <tr>
@@ -717,14 +810,8 @@ $(document).ready(function(){
                                 <td>${site.adresse ?? ""}</td>
                                 <td>${site.code_postal ?? ""}</td>
                                 <td>${site.localite ?? ""}</td>
-                                <td>
-                                    <button class="btn btn-warning btn-sm btnModifierSite" data-id ="${site.idSite}">
-                                        Modifier
-                                    </button>
-                                    <button class="btn btn-danger btn-sm btnSupprimerSite" data-id="${site.idSite}">
-                                        Supprimer
-                                    </button>
-                                </td>
+                                <td><img src="${photoSite}" alt="Photo du site" class="img-thumbnail" style="max-width: 100px; max-height: 100px;"></td>
+                                ${boutons}
                             </tr>
                         `;
                     });
@@ -741,7 +828,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des sites.",false);
             }
 
@@ -774,7 +860,7 @@ $(document).ready(function(){
                         <input type="text" name="code_postal" class="form-control">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Localite</label>
+                        <label class="form-label">Localité</label>
                         <input type="text" name="localite" class="form-control">
                     </div>
                     <div class="mb-3">
@@ -812,7 +898,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de l'ajout d'un site.", false)
             }
         });
@@ -885,14 +970,13 @@ $(document).ready(function(){
             },
 
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement du site.", false);
             }
         });
     });
 
     /*************************************
-     * ENVOIE DE LA MODIFICATION DU SITE *
+     * ENVOI DE LA MODIFICATION DU SITE *
      *************************************/
     $(document).on("submit", "#formModifierSite", function(event){
 
@@ -911,7 +995,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la modification du site.", false);
             }
         });
@@ -946,7 +1029,6 @@ $(document).ready(function(){
             },
 
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la suppression du site.", false);
             }
         });
@@ -971,15 +1053,34 @@ $(document).ready(function(){
             success: function(response){
 
                 if(response.success){
-                    let html = `
-                        <div class="card shadow p-4">
-                            <h2 class="text-center mb-4">Liste des locaux</h2>
-
+                    let colonneActions = "";
+                    let btnAjouter = "";
+                    let boutonsActions = "";
+                    if(roleUtilisateur === "admin" || roleUtilisateur === "owner"){
+                        colonneActions = "<th>Actions</th>";
+                        boutonsActions = `
+                            <td>
+                                <button class="btn btn-warning btn-sm btnModifierLocal" data-id="\${local.idLocal}">
+                                    Modifier
+                                </button>
+                                <button class="btn btn-danger btn-sm btnSupprimerLocal" data-id="\${local.idLocal}">
+                                    Supprimer
+                                </button>
+                            </td>
+                        `;
+                        btnAjouter = `
                             <div class="text-end mb-3">
                                 <button class="btn btn-primary" id="btnAjouterLocal">
                                     Ajouter local
                                 </button>
                             </div>
+                        `;
+                    }
+                    let html = `
+                        <div class="card shadow p-4">
+                            <h2 class="text-center mb-4">Liste des locaux</h2>
+
+                            ${btnAjouter}
 
                             <div class="table-responsive">
                                 <table class="table table-striped table-bordered">
@@ -990,29 +1091,32 @@ $(document).ready(function(){
                                             <th>Site</th>
                                             <th>Informations</th>
                                             <th>Photo</th>
-                                            <th>Actions</th>
+                                            ${colonneActions}
                                         </tr>
                                     </thead>
                                     <tbody>
                     `;
 
                     response.locaux.forEach(function(local){
+
+                        let photoLocal = "images/locaux/default.jpg";
+                        if(local.photo){
+                            photoLocal = "images/locaux/" + local.photo;
+                        }
+                        let boutons = boutonsActions.replaceAll("${local.idLocal}", local.idLocal);
                         html += `
                             <tr>
                                 <td>${local.nomLocal}</td>
                                 <td>${local.nomSite}</td>
                                 <td>${local.infoLocal ?? ""}</td>
-                                <td>${local.photo ?? ""}</td>
-
                                 <td>
-                                    <button class="btn btn-warning btn-sm btnModifierLocal" data-id="${local.idLocal}">
-                                        Modifier
-                                    </button>
-
-                                    <button class="btn btn-danger btn-sm btnSupprimerLocal" data-id="${local.idLocal}">
-                                        Supprimer
-                                    </button>
+                                    <img src="${photoLocal}" 
+                                    alt="Photo du local" 
+                                    class="img-thumbnail" 
+                                    style="max-width: 100px; max-height: 100px;">
                                 </td>
+
+                                ${boutons}
                             </tr>
                         `;
                     });
@@ -1030,7 +1134,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des locaux.", false);
             }
         });
@@ -1080,7 +1183,7 @@ $(document).ready(function(){
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">Infomations</label>
+                                    <label class="form-label">Informations</label>
                                     <input class="form-control" name="infoLocal" type="text">
                                 </div>
 
@@ -1103,7 +1206,6 @@ $(document).ready(function(){
             },
 
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des sites.", false);
             }
         });
@@ -1126,7 +1228,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de l'ajout du local.", false);
             }
         });
@@ -1165,7 +1266,7 @@ $(document).ready(function(){
                             let optionSites = "";
                             responseSites.sites.forEach(function(site){
                                 optionSites += `
-                                    <option value=${site.idSite}" 
+                                    <option value="${site.idSite}" 
                                         ${site.idSite == local.idSite ? "selected" : ""}>
                                         ${site.nom}
                                     </option>
@@ -1215,6 +1316,7 @@ $(document).ready(function(){
                                             <input type="text"
                                                    name="photo"
                                                    class="form-control"
+                                                   value="${local.photo ?? ""}"
                                                    pattern=".*\\.jpg$"
                                                    title="Le fichier doit être au format .jpg">
                                         </div>
@@ -1236,7 +1338,6 @@ $(document).ready(function(){
             },
 
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement du local.", false);
             }
         });
@@ -1258,7 +1359,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la modification du local.", false);
             }
         });
@@ -1291,7 +1391,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la suppression du local.", false);
             }
         });
@@ -1316,15 +1415,34 @@ $(document).ready(function(){
             success: function(response){
 
                 if(response.success){
+                    let colonneActions = "";
+                    let btnAjouter = "";
+                    let boutonsActions = "";
+                    if(roleUtilisateur === "admin" || roleUtilisateur === "owner"){
+                        colonneActions = "<th>Actions</th>";
+                        boutonsActions = `
+                            <td>
+                                <button class="btn btn-warning btn-sm btnModifierRangement" data-id="\${rangement.idRangement}">
+                                    Modifier
+                                </button>
+                                <button class="btn btn-danger btn-sm btnSupprimerRangement" data-id="\${rangement.idRangement}">
+                                    Supprimer
+                                </button>
+                            </td>
+                        `;
+                        btnAjouter = `
+                            <div class="text-end mb-3">
+                                <button class="btn btn-primary" id="btnAjouterRangement">
+                                    Ajouter un rangement
+                                </button>
+                            </div>
+                        `;
+                    }
                     let html = `
                         <div class="card shadow p-4">
                             <h2 class="text-center mb-4">Liste des rangements</h2>
 
-                            <div class="text-end mb-3">
-                                <button class="btn btn-primary" id="btnAjouterRangement">
-                                    Ajouter un rangement 
-                                </button>
-                            </div>
+                            ${btnAjouter}
 
                             <div class="table-responsive">
                                 <table class="table table-striped table-bordered">
@@ -1335,29 +1453,33 @@ $(document).ready(function(){
                                             <th>Local</th>
                                             <th>Informations</th>
                                             <th>Photo</th>
-                                            <th>Actions</th>
+                                            ${colonneActions}
                                         </tr>
                                     </thead>
                                     <tbody>
                     `;
 
                     response.rangements.forEach(function(rangement){
+
+                        let photoRangement = "images/rangements/default.jpg";
+                        if(rangement.photo){
+                            photoRangement = "images/rangements/" + rangement.photo;
+                        }
+                        let boutons = boutonsActions.replaceAll("${rangement.idRangement}", rangement.idRangement);
                         html += `
                             <tr>
                                 <td>${rangement.nomRangement}</td>
                                 <td>${rangement.nomSite}</td>
                                 <td>${rangement.nomLocal}</td>
                                 <td>${rangement.infoRangement ?? ""}</td>
-                                <td>${rangement.photo ?? ""}</td>
-
                                 <td>
-                                    <button class="btn btn-warning btn-sm btnModifierRangement" data-id="${rangement.idRangement}">
-                                        Modifier
-                                    </button>
-                                    <button class="btn btn-danger btn-sm btnSupprimerRangement" data-id="${rangement.idRangement}">
-                                        Supprimer
-                                    </button>
+                                    <img src="${photoRangement}" 
+                                        alt="Photo du rangement" 
+                                        class="img-thumbnail" 
+                                        style="max-width: 100px; max-height: 100px;">
                                 </td>
+
+                                ${boutons}
                             </tr>
                         `;
 
@@ -1376,7 +1498,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des rangements.", false);
             }
         });
@@ -1459,7 +1580,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des locaux.", false);
             }
         });
@@ -1482,7 +1602,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de l'ajout du rangement.", false);
             }
         });
@@ -1586,7 +1705,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement du rangement.", false);
             }
         });
@@ -1609,7 +1727,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la modification du rangement.", false);
             }
         });
@@ -1644,7 +1761,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la suppression du rangement.", false);
             }
         });
@@ -1656,7 +1772,6 @@ $(document).ready(function(){
     $("#btnNiveaux").click(function(event){
         event.preventDefault();
 
-        console.log("ok");
 
         $.ajax({
             url: "api/api.php",
@@ -1667,16 +1782,35 @@ $(document).ready(function(){
             },
             success: function(response){
                 if(response.success){
-                    let html = `
-                        <div class="card shadow p-4">
-
-                            <h2 class="text-center mb-4">Liste des niveaux</h2>
-
+                    let colonneActions = "";
+                    let btnAjouter = "";
+                    let boutonsActions = "";
+                    if(roleUtilisateur === "admin" || roleUtilisateur === "owner"){
+                        colonneActions = "<th>Actions</th>";
+                        boutonsActions = `
+                            <td>
+                                <button class="btn btn-warning btn-sm btnModifierNiveau" data-id="\${niveau.idNiveau}">
+                                    Modifier
+                                </button>
+                                <button class="btn btn-danger btn-sm btnSupprimerNiveau" data-id="\${niveau.idNiveau}">
+                                    Supprimer
+                                </button>
+                            </td>
+                        `;
+                        btnAjouter = `
                             <div class="text-end mb-3">
                                 <button class="btn btn-primary" id="btnAjouterNiveau">
                                     Ajouter un niveau
                                 </button>
                             </div>
+                        `;
+                    }
+                    let html = `
+                        <div class="card shadow p-4">
+
+                            <h2 class="text-center mb-4">Liste des niveaux</h2>
+
+                            ${btnAjouter}
 
                             <div class="table-responsive">
                                 <table class="table table-striped table-bordered">
@@ -1689,7 +1823,7 @@ $(document).ready(function(){
                                             <th>Rangement</th>
                                             <th>Informations</th>
                                             <th>Photo</th>
-                                            <th>Actions</th>
+                                            ${colonneActions}
                                         </tr>
                                     </thead>
 
@@ -1697,6 +1831,11 @@ $(document).ready(function(){
                     `;
 
                     response.niveaux.forEach(function(niveau){
+                        let photoNiveau = "images/niveaux/default.jpg";
+                        if(niveau.photo){
+                            photoNiveau = "images/niveaux/" + niveau.photo;
+                        }
+                        let boutons = boutonsActions.replaceAll("${niveau.idNiveau}", niveau.idNiveau);
 
                         html += `
                             <tr>
@@ -1705,16 +1844,14 @@ $(document).ready(function(){
                                 <td>${niveau.nomLocal}</td>
                                 <td>${niveau.nomRangement}</td>
                                 <td>${niveau.infoNiveau ?? ""}</td>
-                                <td>${niveau.photo ?? ""}</td>
                                 <td>
-                                    <button class="btn btn-warning btn-sm btnModifierNiveau" data-id="${niveau.idNiveau}">
-                                        Modifier
-                                    </button>
-                                    
-                                    <button class="btn btn-danger btn-sm btnSupprimerNiveau" data-id="${niveau.idNiveau}">
-                                        Supprimer
-                                    </button>
+                                    <img src="${photoNiveau}" 
+                                    alt="Photo du niveau" 
+                                    class="img-thumbnail" 
+                                    style="max-width: 100px; 
+                                    max-height: 100px;">
                                 </td>
+                                ${boutons}
                             </tr>
                         `;
                     });
@@ -1731,7 +1868,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des niveaux.", false);
             }
         });
@@ -1843,8 +1979,6 @@ $(document).ready(function(){
             },
 
             error: function(xhr){
-                console.log(xhr.responseText);
-
                 showGlobalMessage("Erreur lors du chargement des rangements.", false);
             }
         });
@@ -1867,7 +2001,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de l'ajout du niveau", false);
             }
         });
@@ -1974,7 +2107,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement du niveau.", false);
             }
         });
@@ -1996,7 +2128,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de la modification du niveau", false);
             }
         })
@@ -2030,7 +2161,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("erreur lors de la suppression du niveau.", false);
             }
         });
@@ -2043,6 +2173,16 @@ $(document).ready(function(){
     $("#btnPrets").click(function(event){
 
         event.preventDefault();
+
+        let btnAjouterPret = "";
+
+        if(roleUtilisateur === "admin"){
+            btnAjouterPret = `
+                <button class="btn btn-primary" id="btnAjouterPret">
+                    Ajouter un prêt
+                </button>
+            `;
+        }
 
         $.ajax({
             url: "api/api.php",
@@ -2059,8 +2199,10 @@ $(document).ready(function(){
                             <h2 class="text-center mb-4">Liste des prêts</h2>
 
                             <div class="text-end mb-3">
-                                <button class="btn btn-primary" id="btnAjouterPret">
-                                    Ajouter un prêt
+                                ${btnAjouterPret}
+
+                                <button class="btn btn-secondary" id="btnMesPrets">
+                                    Mes prêts
                                 </button>
 
                                 <button class="btn btn-secondary" id="btnHistoriquePrets">
@@ -2124,7 +2266,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement des prêts.", false);
             }
         });
@@ -2253,7 +2394,7 @@ $(document).ready(function(){
     });
 
     /************************************
-     * ENVOIE DU BOUTON D'AJOUT DE PRÊT *
+     * ENVOI DU BOUTON D'AJOUT DE PRÊT *
      ************************************/
     $(document).on("submit", "#formAjoutPret", function(event){
 
@@ -2272,7 +2413,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors de l'ajout du prêt.", false);
             }
         });
@@ -2307,7 +2447,6 @@ $(document).ready(function(){
                 }
             },
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du retour du prêt.", false);
             }
         });
@@ -2401,7 +2540,6 @@ $(document).ready(function(){
             },
 
             error: function(xhr){
-                console.log(xhr.responseText);
                 showGlobalMessage("Erreur lors du chargement de l'historique.", false);
             }
         });
@@ -2412,5 +2550,807 @@ $(document).ready(function(){
         $("#btnPrets").click();
     });
     
+
+    /**********************
+     * RECHERCHE D'OBJETS *
+     **********************/
+    $(document).on("click", "#btnRechercheObjet", function(event){
+
+        event.preventDefault();
+
+        let html = `
+            <div class="card shadow p-4">
+                <h2 class="text-center mb-4">Recherche d'objets</h2>
+
+                <form id="formRechercheObjets">
+                    <div class="mb-3">
+                        <label class="form-label">Nom de l'objet</label>
+                        <input type="text" name="nomObjet" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Catégorie</label>
+                        <input type="text" name="categorie" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Statut</label>
+                        <select name="statut" class="form-control">
+                            <option value="">Tous</option>
+                            <option value="disponible">Disponible</option>
+                            <option value="indisponible">Indisponible</option>
+                            <option value="prêté">En prêt</option>
+                            <option value="en réparation">En Réparation</option>
+                            <option value="hors-service">Hors Service</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Site</label>
+                        <input type="text" name="site" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Local</label>
+                        <input type="text" name="local" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Rangement</label>
+                        <input type="text" name="rangement" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Niveau</label>
+                        <input type="text" name="niveau" class="form-control">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        Rechercher
+                    </button>
+                </form>
+
+
+
+                <div id="resultatsRecherche" class="mt-4"></div>
+            </div>
+        `;
+        $("#contenu").html(html);
+    });
+
+    $(document).on("submit", "#formRechercheObjets", function(event){
+
+        event.preventDefault();
+
+            $.ajax({
+                url: "api/api.php",
+                method: "POST",
+                dataType: "json",
+                data: $(this).serialize() + "&myFunction=searchObjets",
+                success: function(response){
+
+                    if(!response.success){
+                        $("#resultatsRecherche").html(`
+                            <div class="alert alert-warning text-center">
+                                Aucun objet trouvé.
+                            </div>
+                        `);
+                        return;
+                    }
+
+
+                    let html = `
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>Objet</th>
+                                        <th>Catégorie</th>
+                                        <th>Statut</th>
+                                        <th>Site</th>
+                                        <th>Local</th>
+                                        <th>Rangement</th>
+                                        <th>Niveau</th>
+                                        <th>Infos</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+
+                    response.objets.forEach(function(objet){
+                        html += `
+                            <tr>
+                                <td>${objet.nomObjet}</td>
+                                <td>${objet.nomCategorie ?? ""}</td>
+                                <td>${objet.statut ?? ""}</td>
+                                <td>${objet.nomSite ?? ""}</td>
+                                <td>${objet.nomLocal ?? ""}</td>
+                                <td>${objet.nomRangement ?? ""}</td>
+                                <td>${objet.nomNiveau ?? ""}</td>
+                                <td>${objet.infoPlus ?? ""}</td>
+                            </tr>
+                        `; 
+                    });
+
+                    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                    `;
+                    $("#resultatsRecherche").html(html);
+                },
+
+                error: function(xhr){
+                    showGlobalMessage("Erreur lors de la recherche d'objets.", false);
+                }
+            });
+    });
+
+    $(document).on("click", "#btnRechercheArborescence", function(event){
+
+        event.preventDefault();
+
+        $.ajax({
+            url: "api/api.php",
+            method: "POST",
+            dataType: "json",
+            data: {
+                myFunction: "getFormObjetData"
+            },
+            success: function(response){
+                let optionsSites = "<option value=''>Tous les sites</option>";
+                let optionsLocaux = "<option value=''>Tous les locaux</option>";
+                let optionsRangements = "<option value=''>Tous les rangements</option>";
+                let optionsNiveaux = "<option value=''>Tous les niveaux</option>";
+
+                response.sites.forEach(function(site){
+
+                    optionsSites += `
+                        <option value="${site.idSite}">
+                            ${site.nom}
+                        </option>
+                    `;
+                });
+
+                response.locaux.forEach(function(local){
+
+                    optionsLocaux += `
+                        <option value="${local.idLocal}">
+                            ${local.nom}
+                        </option>
+                    `;
+                });
+
+                response.rangements.forEach(function(rangement){
+
+                    optionsRangements += `
+                        <option value="${rangement.idRangement}">
+                            ${rangement.nom}
+                        </option>
+                    `;
+                });
+
+                response.niveaux.forEach(function(niveau){
+
+                    optionsNiveaux += `
+                        <option value="${niveau.idNiveau}">
+                            ${niveau.nomNiveau}
+                        </option>
+                    `;
+                });
+
+                let html = `
+                    <div class="card shadow p-4">
+
+                        <h2 class="text-center mb-4">
+                            Recherche par arborescence
+                        </h2>
+
+                        <form id="formRechercheArborescence">
+
+                            <div class="mb-3">
+                                <label class="form-label">Site</label>
+                                <select name="idSite" class="form-control">
+                                    ${optionsSites}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Local</label>
+                                <select name="idLocal" class="form-control">
+                                    ${optionsLocaux}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Rangement</label>
+                                <select name="idRangement" class="form-control">
+                                    ${optionsRangements}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Niveau</label>
+                                <select name="idNiveau" class="form-control">
+                                    ${optionsNiveaux}
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100">
+                                Rechercher
+                            </button>
+                        </form>
+
+                        <div id="resultatsArborescence" class="mt-4"></div>
+                    </div>
+                `;
+                $("#contenu").html(html);
+            }
+        
+        });
+
+    });
+
+    $(document).on("submit", "#formRechercheArborescence", function(event){
+        event.preventDefault();
+
+        $.ajax({
+            url: "api/api.php",
+            method: "POST",
+            dataType: "json",
+            data: $(this).serialize() + "&myFunction=searchObjetsArborescence",
+            success: function(response){
+                if(!response.success){
+                    $("#resultatsArborescence").html(`
+                        <div class="alert alert-warning text-center">
+                            Aucun objet trouvé.
+                        </div>
+                    `);
+                    return;
+                }
+
+                let html = `
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+
+                        <thead class="table-primary">
+                            <tr>
+                                <th>Objet</th>
+                                <th>Catégorie</th>
+                                <th>Statut</th>
+                                <th>Site</th>
+                                <th>Local</th>
+                                <th>Rangement</th>
+                                <th>Niveau</th>
+                                <th>Infos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                response.objets.forEach(function(objet){
+                    html += `
+                        <tr>
+                            <td>${objet.nomObjet}</td>
+                            <td>${objet.nomCategorie}</td>
+                            <td>${objet.statut}</td>
+                            <td>${objet.nomSite}</td>
+                            <td>${objet.nomLocal}</td>
+                            <td>${objet.nomRangement}</td>
+                            <td>${objet.nomNiveau}</td>
+                            <td>${objet.infoPlus}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                </div>
+                `;
+                $("#resultatsArborescence").html(html);
+            }
+        });
+    });
+
+    /***********************
+     * ADMIN : Utilisateur *
+     ***********************/
+$(document).on("click", "#btnAdmin", function(event){
+
+        event.preventDefault();
+
+        $.when(
+            $.ajax({
+                url: "api/api.php",
+                method: "POST",
+                dataType: "json",
+                data: {
+                    myFunction: "getStatistiquesAdmin"
+                }
+            }),
+
+            $.ajax({
+                url: "api/api.php",
+                method: "POST",
+                dataType: "json",
+                data: {
+                    myFunction: "getUtilisateursAdmin"
+                }
+            })
+
+        ).done(function(responseStats, responseUsers){
+
+            let statsResponse = responseStats[0];
+            let usersResponse = responseUsers[0];
+
+            if(!statsResponse.success){
+                showGlobalMessage(statsResponse.message, false);
+                return;
+            }
+
+            if(!usersResponse.success){
+                showGlobalMessage(usersResponse.message, false);
+                return;
+            }
+
+            let stats = statsResponse.stats;
+
+            let htmlStats = `
+                <div class="row mb-4">
+
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center shadow p-3">
+                            <h5>Objets</h5>
+                            <p class="fs-3 fw-bold">${stats.nbObjets}</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center shadow p-3">
+                            <h5>Disponibles</h5>
+                            <p class="fs-3 fw-bold">${stats.nbObjetsDisponibles}</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center shadow p-3">
+                            <h5>Prêtés</h5>
+                            <p class="fs-3 fw-bold">${stats.nbObjetsPretes}</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center shadow p-3">
+                            <h5>Utilisateurs</h5>
+                            <p class="fs-3 fw-bold">${stats.nbUtilisateurs}</p>
+                        </div>
+                    </div>
+
+                </div>
+            `;
+
+            let html = `
+                <div class="card shadow p-4">
+                    <h2 class="text-center mb-4">Administration</h2>
+
+                    ${htmlStats}
+
+                    <h3 class="text-center mb-4">Gestion des utilisateurs</h3>
+
+                    <div class="text-end mb-3">
+                        <button class="btn btn-primary" id="btnAjouterUtilisateur">
+                            Ajouter un utilisateur
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Prénom</th>
+                                    <th>Nom</th>
+                                    <th>Login</th>
+                                    <th>Rôle</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+
+            usersResponse.utilisateurs.forEach(function(user){
+                html += `
+                    <tr>
+                        <td>${user.prenomUtilisateur}</td>
+                        <td>${user.nomUtilisateur}</td>
+                        <td>${user.login}</td>
+                        <td>${user.role}</td>
+                        <td>
+                            <button class="btn btn-warning btn-sm btnModifierUtilisateur"
+                                    data-id="${user.idUtilisateur}">
+                                Modifier
+                            </button>
+
+                            <button class="btn btn-danger btn-sm btnSupprimerUtilisateur"
+                                    data-id="${user.idUtilisateur}">
+                                Supprimer
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            $("#contenu").html(html);
+
+        }).fail(function(xhr){
+            showGlobalMessage("Erreur lors du chargement de l'administration.", false);
+        });
+    });
+
+    /***************************************
+     * FORMULAIRE D'AJOUT D'UN UTILISATEUR *
+     ***************************************/
+    $(document).on("click", "#btnAjouterUtilisateur", function(event){
+        event.preventDefault();
+
+        let html = `
+            <div class="card shadow p-4">
+                <h2 class="text-center mb-4">Ajouter un utilisateur</h2>
+
+                <form id="formAjoutUtilisateur">
+
+                    <div class="mb-3">
+                        <label class="form-label">nom</label>
+                        <input type="text" name="nomUtilisateur" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">prénom</label>
+                        <input type="text" name="prenomUtilisateur" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">login</label>
+                        <input type="text" name="login" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">mot de passe</label>
+                        <input type="password" name="mdp" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">confirmation du mot de passe</label>
+                        <input type="password" name="mdpConfirmation" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">rôle</label>
+                        <select name="role" class="form-control" required>
+                            <option value="user">utilisateur</option>
+                            <option value="admin">administrateur</option>
+                            <option value="owner">propriétaire</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        Ajouter
+                    </button>
+
+                </form>
+            </div>
+        `;
+        $("#contenu").html(html);
+    });
+
+    /************************************************
+     * ENVOI DU FORMULAIRE D'AJOUT D'UN UTILISATEUR *
+     ************************************************/
+    $(document).on("submit", "#formAjoutUtilisateur", function(event){
+        event.preventDefault();
+
+        $.ajax({
+            url: "api/api.php",
+            method: "POST",
+            dataType: "json",
+            data: $(this).serialize() + "&myFunction=addUtilisateur",
+            success: function(response){
+                showGlobalMessage(response.message, response.success);
+
+                if(response.success){
+                    $("#btnAdmin").click();
+                }
+
+            },  
+            error: function(xhr){
+                showGlobalMessage("Erreur lors de l'ajout de l'utilisateur.", false);
+            }
+        });
+    });
+
+
+    /***********************************************
+     * FORMULAIRE DE MODIFICATION D'UN UTILISATEUR *
+     ***********************************************/
+    $(document).on("click", ".btnModifierUtilisateur", function(event){
+
+        event.preventDefault();
+
+        let idUtilisateur = $(this).data("id");
+
+            $.ajax({
+                url: "api/api.php",
+                method: "POST",
+                dataType: "json",
+                data: {
+                    idUtilisateur: idUtilisateur,
+                    myFunction: "getUtilisateurById"
+                },
+                success: function(response){
+
+                    if(!response.success){
+                        showGlobalMessage(response.message, false);
+                        return;
+                    }
+
+                    let utilisateur = response.utilisateur;
+
+                    let html = `
+                        <div class="card shadow p-4">
+                            <h2 class="text-center mb-4">Modifier l'utilisateur</h2>
+
+                            <form id="formModificationUtilisateur" data-id="${utilisateur.idUtilisateur}">
+
+                                <input type="hidden" name="idUtilisateur" value="${utilisateur.idUtilisateur}">
+
+                                <div class="mb-3">
+                                    <label class="form-label">nom</label>
+                                    <input type="text" name="nomUtilisateur" class="form-control" value="${utilisateur.nomUtilisateur}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">prénom</label>
+                                    <input type="text" name="prenomUtilisateur" class="form-control" value="${utilisateur.prenomUtilisateur}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">login</label>
+                                    <input type="text" name="login" class="form-control" value="${utilisateur.login}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">mot de passe</label>
+                                    <input type="password" name="mdp" class="form-control" placeholder="Laisser vide pour ne pas changer le mot de passe">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">confirmation du mot de passe</label>
+                                    <input type="password" name="mdpConfirmation" class="form-control" placeholder="Laisser vide pour ne pas changer le mot de passe">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">rôle</label>
+                                    <select name="role" class="form-control">
+                                        <option value="user" ${utilisateur.role === "user" ? "selected" : ""}>utilisateur</option>
+                                        <option value="admin" ${utilisateur.role === "admin" ? "selected" : ""}>administrateur</option>
+                                        <option value="owner" ${utilisateur.role === "owner" ? "selected" : ""}>propriétaire</option>
+                                    </select>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary w-100">
+                                    Enregistrer les modifications
+                                </button>
+                            </form>
+                        </div>
+                    `;
+                    $("#contenu").html(html);
+                },
+                error: function(xhr){
+                    showGlobalMessage("Erreur lors du chargement de l'utilisateur.", false);
+                }
+            });
+    });
+
+    /********************************************************
+     * ENVOI DU FORMULAIRE DE MODIFICATION D'UN UTILISATEUR *
+     ********************************************************/
+    $(document).on("submit", "#formModificationUtilisateur", function(event){
+
+        event.preventDefault();
+
+        $.ajax({
+            url: "api/api.php",
+            method: "POST",
+            data: $(this).serialize() + "&myFunction=updateUtilisateur",
+            success: function(response){
+                showGlobalMessage(response.message, response.success);
+
+                if(response.success){
+                    $("#btnAdmin").click();
+                }
+            },
+            error: function(xhr){
+                showGlobalMessage("Erreur lors de la modification de l'utilisateur.", false);
+            }
+        });
+    });
+
+    /********************************
+     * SUPPRESSION D'UN UTILISATEUR *
+     ********************************/
+    $(document).on("click", ".btnSupprimerUtilisateur", function(event){
+        event.preventDefault();
+
+        let idUtilisateur = $(this).data("id");
+
+        if(!confirm("Confirmer la suppression de l'utilisateur ?")){
+            return;
+        }
+
+        $.ajax({
+            url: "api/api.php",
+            method: "POST",
+            data: "idUtilisateur=" + idUtilisateur + "&myFunction=deleteUtilisateur",
+            success: function(response){
+                showGlobalMessage(response.message, response.success);
+
+                if(response.success){
+                    $("#btnAdmin").click();
+                }
+            },
+            error: function(xhr){
+                showGlobalMessage("Erreur lors de la suppression de l'utilisateur.", false);
+            }
+        });
+    });
+
+    /*************************************************************************************************
+     * PRÊTER DIRECTEMENT DEPUIS LA LISTE DES OBJETS (SANS PASSER PAR LE FORMULAIRE D'AJOUT DE PRÊT) *
+     *************************************************************************************************/
+    $(document).on("click", ".btnPreterObjet", function(event){
+
+        event.preventDefault();
+
+        let idObjet = $(this).data("id");
+
+        const now = new Date();
+        const today = new Date(
+            now.getTime() - now.getTimezoneOffset() * 60000
+        )
+        .toISOString()
+        .split("T")[0];
+
+        let html = `
+            <div class="card shadow p-4">
+                <h2 class="text-center mb-4">Prêter l'objet</h2>
+                <form id="formAjoutPret">
+                    <input type="hidden" name="idObjet" value="${idObjet}">
+
+                    <div class="mb-3">
+                        <label class="form-label">Date retour prévue</label>
+                        <input type="date" name="dateRetourPrevue" class="form-control" min="${today}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Commentaire</label>
+                        <textarea name="commentaire" class="form-control"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100">
+                        Valider le prêt
+                    </button>
+                </form>
+            </div>
+        `;
+        $("#contenu").html(html);
+
+
+    });
+
+    /************************************************************************************
+     * AFFICHAGE DES PRÊTS DE L'UTILISATEUR CONNECTÉ (LORSQU'IL CLIQUE SUR "MES PRÊTS") *
+     ************************************************************************************/
+    $(document).on("click", "#btnMesPrets", function(event){
+
+        event.preventDefault();
+
+        $.ajax({
+            url: "api/api.php",
+            method: "POST",
+            dataType: "json",
+            data: {
+                myFunction: "getMesPrets"
+            },
+            success: function(response){
+
+                if(!response.success){
+                    showGlobalMessage(response.message, false);
+                    return;
+                }
+                let html = `
+                    <div class="card shadow p-4">
+                        <h2 class="text-center mb-4">Mes prêts</h2>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>Objet</th>
+                                        <th>Catégorie</th>
+                                        <th>Date prêt</th>
+                                        <th>Date retour prévue</th>
+                                        <th>Date retour réelle</th>
+                                        <th>Commentaire</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+
+                if(response.prets.length > 0){
+
+                    response.prets.forEach(function(pret){
+                        let action = "";
+
+                        if(pret.dateRetourReelle === null){
+                            action = `
+                                <button class="btn btn-success btn-sm btnRetourPret" data-id="${pret.idPret}">
+                                    Retourner le prêt
+                                </button>
+                            `;
+                        }
+                        else {
+                            action = `
+                                <span class="text-success">
+                                    Prêt retourné
+                                </span>
+                            `;
+                        }
+
+                        html += `
+                            <tr>
+                                <td>${pret.nomObjet}</td>
+                                <td>${pret.nomCategorie}</td>
+                                <td>${pret.datePret}</td>
+                                <td>${pret.dateRetourPrevue}</td>
+                                <td>${pret.dateRetourReelle || "Non retourné"}</td>
+                                <td>${pret.commentaire}</td>
+                                <td>${action}</td>
+                            </tr>
+                        `;
+                    });
+
+                } else {
+                    html += `
+                        <tr>
+                            <td colspan="7" class="text-center">
+                                Vous n'avez aucun prêt.
+                            </td>
+                        </tr>
+                    `;
+                }
+
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                $("#contenu").html(html);
+
+            },
+
+            error: function(xhr){
+                showGlobalMessage("Erreur lors du chargement de vos prêts.", false);
+            }
+        });
+    });
 
 });

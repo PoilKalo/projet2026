@@ -1,6 +1,7 @@
 // quand la page est chargé
 $(document).ready(function(){
 
+
     // lorsqu'on submit le formulaire
     $("#form_login").submit(function(event){
 
@@ -31,6 +32,7 @@ $(document).ready(function(){
                     setTimeout(function(){
                         window.location.href='index.html';
                     },1000);
+
                 }
                 else {
                     $("#message")

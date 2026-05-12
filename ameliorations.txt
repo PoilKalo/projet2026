@@ -1,0 +1,11 @@
+- mettre les bonnes photos
+- pour les prêts modifier pour que l'utilisateur connecté soit directement celui qui fait le prêt
+- mettre un bouton prêt dans la liste d'affichage des objets 
+- mettre un bouton mes prêts
+- vérifie rôle des simples users
+- si objet en réparation ou hors-service il ne peut pas être prêté
+- pas pouvoir supprimé un objet qui est en prêt 
+- ne pas prendre un prêt ou on est le proprio
+
+SUPPLEMENT GOURMAND 
+- si une personne qui utilise un objet veut un délais en polus de sa date de prêt de retour prévu, elle peut faire une demande avec la date qui sera envoyé à l'utilisateur qui prete l'objet et qui devra donc valider la demande

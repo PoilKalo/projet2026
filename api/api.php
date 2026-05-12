@@ -57,9 +57,17 @@ if(isset($_POST['myFunction'])){
         "addPret",
         "retourPret",
         "getHistoriquePrets",
-
-
-        "getUtilisateurs"
+        "getMesPrets",
+        "searchObjets",
+        "searchObjetsArborescence",
+        "getUtilisateurs",
+        "getUtilisateursAdmin",
+        "addUtilisateur",
+        "getUtilisateurById",
+        "updateUtilisateur",
+        "deleteUtilisateur",
+        "verifierComplexiteMdp",
+        "getStatistiquesAdmin"
     ];
 
     // Vérification de la sécurité
@@ -95,7 +103,7 @@ function login($pdo){
     $user = $req->fetch(PDO::FETCH_ASSOC);
 
     // Vérification
-    if($user && $mdp === $user['mdp']){
+    if($user && password_verify($mdp, $user['mdp'])){
 
         // Stockage en session
         $_SESSION["idUtilisateur"] = $user['idUtilisateur'];
@@ -163,6 +171,7 @@ function getObjets($pdo){
     SELECT 
         objet.idObjet,
         objet.nom AS nomObjet,
+        objet.photo,
         objet.statut,
         objet.infoPlus,
         categorie.nom AS nomCategorie,
@@ -240,9 +249,46 @@ function getFormObjetData($pdo){
 
     $niveaux = $reqNiv->fetchAll(PDO::FETCH_ASSOC);
 
+    // utile pour la recherche par arborescence pour afficher les sites dans le select
+    $reqSites = $pdo->prepare("
+        SELECT *
+        FROM site
+        ORDER BY nom
+    ");
+
+    $reqSites->execute();
+
+    $sites = $reqSites->fetchAll(PDO::FETCH_ASSOC);
+
+
+    $reqLocaux = $pdo->prepare("
+        SELECT *
+        FROM local
+        ORDER BY nom
+    ");
+
+    $reqLocaux->execute();
+
+    $locaux = $reqLocaux->fetchAll(PDO::FETCH_ASSOC);
+
+
+    $reqRangements = $pdo->prepare("
+        SELECT *
+        FROM rangement
+        ORDER BY nom
+    ");
+
+    $reqRangements->execute();
+
+    $rangements = $reqRangements->fetchAll(PDO::FETCH_ASSOC);
+
     echo json_encode([
         "success" => true,
+
         "categories" => $categories,
+        "sites" => $sites,
+        "locaux" => $locaux,
+        "rangements" => $rangements,
         "niveaux" => $niveaux
     ]);
 }
@@ -277,18 +323,20 @@ function addObjet($pdo){
     $infoPlus = $_POST['infoPlus'] ?? "";
     $statut = $_POST["statut"] ?? "disponible";
     $infoRangement = $_POST["infoRangement"] ?? "";
+    $photo = $_POST["photo"] ?? "";
 
     // Insertion SQL
     $req = $pdo->prepare("
     INSERT INTO objet
     (nom, infoRangement, photo, idCategorie, idNiveau, infoPlus, idUtilisateur, statut)
     VALUES
-    (?,?,NULL,?,?,?,?,?)
+    (?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
     $req->execute([
         $nom,
         $infoRangement,
+        $photo,
         $idCategorie,
         $idNiveau,
         $infoPlus,
@@ -352,6 +400,7 @@ function updateObjet($pdo){
     $infoRangement = $_POST['infoRangement'] ?? "";
     $infoPlus = $_POST['infoPlus'] ?? "";
     $statut = $_POST['statut'] ?? "";
+    $photo = $_POST['photo'] ?? "";
 
     // Vérifier que l'objet existe
     $reqCheck = $pdo->prepare("
@@ -390,7 +439,8 @@ function updateObjet($pdo){
         set nom = ?,
             infoRangement = ?,
             infoPlus = ?,
-            statut = ?
+            statut = ?,
+            photo = ?
         where idObjet = ?
     ");
 
@@ -400,6 +450,7 @@ function updateObjet($pdo){
         $infoRangement,
         $infoPlus,
         $statut,
+        $photo,
         $idObjet]);
     
     if($req->rowCount() > 0){
@@ -456,6 +507,24 @@ function deleteObjet($pdo){
         echo json_encode([
             "success" => false,
             "message" => "Vous n'avez pas les droits de suppression sur cet objet."
+        ]);
+        return;
+    }
+
+    // Vérification que l'objet n'est pas actuellement emprunté
+    $reqCheckPret = $pdo->prepare("
+        select * 
+        from pret
+        where idObjet = ? 
+        and dateRetourReelle is null
+    ");
+
+    $reqCheckPret->execute([$idObjet]);
+
+    if($reqCheckPret->rowCount() > 0){
+        echo json_encode([
+            "success" => false,
+            "message" => "Cet objet est actuellement emprunté et ne peut être supprimé."
         ]);
         return;
     }
@@ -822,7 +891,7 @@ function getSiteById($pdo){
 
     $req->execute([$idSite]);
 
-    $site = $req->fetch(PDO:: FETCH_ASSOC);
+    $site = $req->fetch(PDO::FETCH_ASSOC);
 
     if(!$site){
         echo json_encode([
@@ -2038,6 +2107,8 @@ function getUtilisateurs($pdo){
         return;
     }
 
+
+
     $req = $pdo->prepare("
         SELECT 
             idUtilisateur,
@@ -2079,10 +2150,14 @@ function addPret($pdo){
         return;
     }
 
-    $idObjet = $_POST['idObjet'];
-    $idUtilisateur = $_POST['idUtilisateur'];
-    $dateRetourPrevue = $_POST['dateRetourPrevue'];
-    $commentaire = $_POST['commentaire'];
+    $idObjet = $_POST['idObjet'] ?? "";
+    $idUtilisateur = $_POST['idUtilisateur'] ?? "";
+    $dateRetourPrevue = $_POST['dateRetourPrevue'] ?? "";
+    $commentaire = $_POST['commentaire'] ?? "";
+
+    if($idUtilisateur === ""){
+        $idUtilisateur = $_SESSION['idUtilisateur'];
+    }
 
     // Vérifier objet
     $reqCheckObjet = $pdo->prepare("
@@ -2138,6 +2213,41 @@ function addPret($pdo){
         echo json_encode([
             "success" => false,
             "message" => "Cet objet est déjà prêté."
+        ]);
+        return;
+    }
+
+    // Si objetdéjà prêté, on ne peut pas le prêter à nouveau
+    if($objet['statut'] === 'prêté'){
+        echo json_encode([
+            "success" => false,
+            "message" => "Cet objet est déjà prêté."
+        ]);
+        return;
+    }
+
+    // Si l'état de l'objet est reparation ou hors service, on ne peut pas le prêter
+    if($objet['statut'] === 'en réparation' || $objet['statut'] === 'hors-service'){
+        echo json_encode([
+            "success" => false,
+            "message" => "Cet objet n'est pas disponible pour le prêt."
+        ]);
+        return;
+    }
+
+    // Si l'id de l'utilisateur propriétaire de l'objet est le même que celui de l'emprunteur, on ne peut pas prêter
+    if($objet['idUtilisateur'] == $idUtilisateur){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous ne pouvez pas emprunter votre propre objet."
+        ]);
+        return;
+    }
+
+    if($_SESSION['role'] !== 'admin' && $_SESSION['idUtilisateur'] != $idUtilisateur){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous ne pouvez créer un prêt que pour vous-même."
         ]);
         return;
     }
@@ -2238,7 +2348,7 @@ function retourPret($pdo){
     WHERE idObjet = ?
     ");
 
-$reqUpdateObjet->execute([$pret["idObjet"]]);
+    $reqUpdateObjet->execute([$pret["idObjet"]]);
 
     echo json_encode([
         "success" => true,
@@ -2289,6 +2399,727 @@ function getHistoriquePrets($pdo){
     echo json_encode([
         "success" => true,
         "prets" => $prets
+    ]);
+}
+
+/************************************************************************************
+ * FONCTION : searchObjets                                                          *
+ * Permet de rechercher des objets en fonction d'un mot-clé présent dans le nom ou  *
+ ************************************************************************************/
+function searchObjets($pdo){
+
+    if(!isset($_SESSION['idUtilisateur'])){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous devez être connecté."
+        ]);
+        return;
+    }
+
+    $nomObjet = $_POST['nomObjet'] ?? "";
+    $categorie = $_POST['categorie'] ?? "";
+    $statut = $_POST['statut'] ?? "";
+    $site = $_POST['site'] ?? "";
+    $local = $_POST['local'] ?? "";
+    $rangement = $_POST['rangement'] ?? "";
+    $niveau = $_POST['niveau'] ?? "";
+
+    $sql = "
+        select 
+            objet.idObjet,
+            objet.nom as nomObjet,
+            objet.infoPlus,
+            objet.statut,
+
+            categorie.nom as nomCategorie,
+            niveau.nom as nomNiveau,
+            rangement.nom as nomRangement,
+            local.nom as nomLocal,
+            site.nom as nomSite
+
+        from objet
+
+        left join categorie
+            on objet.idCategorie = categorie.idCategorie
+
+        left join niveau
+            on objet.idNiveau = niveau.idNiveau
+
+        left join rangement
+            on niveau.idRangement = rangement.idRangement
+
+        left join local
+            on rangement.idLocal = local.idLocal
+
+        left join site
+            on local.idSite = site.idSite
+
+        where 1 = 1
+    ";
+
+    $param = [];
+
+    if($nomObjet !== ""){
+        $sql .= " and objet.nom like ? ";
+        $param[] = "%" . $nomObjet . "%";
+    }
+
+    if($categorie !== ""){
+        $sql .= " and categorie.nom like ? ";
+        $param[] = "%" . $categorie . "%";
+    }
+
+    if($statut !== ""){
+        $sql .= " and objet.statut = ?";
+        $param[] = $statut;
+    }
+
+    if($site !== ""){
+        $sql .= " and site.nom like ? ";
+        $param[] = "%" . $site . "%";
+    }
+
+    if($local !== ""){
+        $sql .= " and local.nom like ? ";
+        $param[] = "%" . $local . "%";
+    }
+
+    if($rangement !== ""){
+        $sql .= " and rangement.nom like ? ";
+        $param[] = "%" . $rangement . "%";
+    }
+
+    if($niveau !== ""){
+        $sql .= " and niveau.nom like ? ";
+        $param[] = "%" . $niveau . "%";
+    }
+
+    $sql .= " order by objet.nom, site.nom, local.nom, rangement.nom, niveau.nom";
+
+    $req = $pdo->prepare($sql);
+
+    $req->execute($param);
+
+    $objets = $req->fetchAll(PDO::FETCH_ASSOC);
+
+
+    if(empty($objets)){
+        echo json_encode([
+            "success" => false,
+            "message" => "Aucun objet trouvé pour cette recherche."
+        ]);
+        return;
+    }
+
+    echo json_encode([
+        "success" => true,
+        "objets" => $objets
+    ]);
+}
+
+/***************************************************************************************
+ * FONCTION : searchObjetsArborescence                                                 * 
+ * Permet de rechercher des objets en fonction de leur emplacement dans l'arborescence *
+ ***************************************************************************************/
+function searchObjetsArborescence($pdo){
+
+    if(!isset($_SESSION['idUtilisateur'])){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous devez être connecté."
+        ]);
+        return;
+    }
+
+    $idSite = $_POST['idSite'] ?? "";
+    $idLocal = $_POST['idLocal'] ?? "";
+    $idRangement = $_POST['idRangement'] ?? "";
+    $idNiveau = $_POST['idNiveau'] ?? "";
+
+    $sql = "
+        select 
+            objet.idObjet,
+            objet.nom as nomObjet,
+            objet.infoPlus,
+            objet.statut,
+
+            categorie.nom as nomCategorie,
+            niveau.nom as nomNiveau,
+            rangement.nom as nomRangement,
+            local.nom as nomLocal,
+            site.nom as nomSite
+
+        from objet
+
+        left join categorie
+            on objet.idCategorie = categorie.idCategorie
+
+        left join niveau
+            on objet.idNiveau = niveau.idNiveau
+
+        left join rangement
+            on niveau.idRangement = rangement.idRangement
+
+        left join local
+            on rangement.idLocal = local.idLocal
+
+        left join site
+            on local.idSite = site.idSite
+
+        where 1 = 1
+    ";
+
+    $param = [];
+
+    if($idSite !== ""){
+        $sql .= " and site.idSite = ? ";
+        $param[] = $idSite;
+    }
+
+    if($idLocal !== ""){
+        $sql .= " and local.idLocal = ? ";
+        $param[] = $idLocal;
+    }
+
+    if($idRangement !== ""){
+        $sql .= " and rangement.idRangement = ? ";
+        $param[] = $idRangement;
+    }
+
+    if($idNiveau !== ""){
+        $sql .= " and niveau.idNiveau = ? ";
+        $param[] = $idNiveau;
+    }
+
+    $sql .= " order by objet.nom, site.nom, local.nom, rangement.nom, niveau.nom";
+
+    $req = $pdo->prepare($sql);
+
+    $req->execute($param);
+
+    $objets = $req->fetchAll(PDO::FETCH_ASSOC);
+
+    if(empty($objets)){
+        echo json_encode([
+            "success" => false,
+            "message" => "Aucun objet trouvé pour cette recherche."
+        ]);
+        return;
+    }
+
+    echo json_encode([
+        "success" => true,
+        "objets" => $objets
+    ]);
+}
+
+/*******************************************************************************************************
+ * FONCTION : getUtilisateursAdmin                                                                     *
+ * Permet de récupérer la liste des utilisateurs avec des informations supplémentaires pour les admins *
+ */
+function getUtilisateursAdmin($pdo){
+
+    if(!isset($_SESSION['idUtilisateur'])){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous devez être connecté."
+        ]);
+        return;
+    }
+
+    if($_SESSION['role'] !== "admin"){
+        echo json_encode([
+            "success" => false,
+            "message" => "Accès réservé à l'administrateur."
+        ]);
+        return;
+    }
+
+    $req = $pdo->prepare("
+        SELECT 
+            idUtilisateur,
+            nomUtilisateur,
+            prenomUtilisateur,
+            role,
+            login
+        FROM utilisateur
+        ORDER BY nomUtilisateur, prenomUtilisateur
+    ");
+
+    $req->execute();
+
+    $utilisateurs = $req->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode([
+        "success" => true,
+        "utilisateurs" => $utilisateurs
+    ]);
+}
+
+/**********************************************
+ * FONCTION : addUtilisateur                  *  
+ * Permet à un admin d'ajouter un utilisateur *
+ **********************************************/
+function addUtilisateur($pdo){
+
+    if(!isset($_SESSION["idUtilisateur"])){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous devez être connecté."
+        ]);
+        return;
+    }
+
+    if($_SESSION['role'] !== "admin"){
+        echo json_encode([
+            "success" => false,
+            "message" => "Accès réservé à l'administrateur."
+        ]);
+        return;
+    }
+
+    $nomUtilisateur = $_POST['nomUtilisateur'] ?? "";
+    $prenomUtilisateur = $_POST['prenomUtilisateur'] ?? "";
+    $login = $_POST['login'] ?? "";
+    $mdp = $_POST['mdp'] ?? "";
+    $mdpConfirmation = $_POST['mdpConfirmation'] ?? "";
+    $role = $_POST['role'] ?? "user";
+
+    if($nomUtilisateur === "" || $prenomUtilisateur === "" || $login === "" || $mdp === "" || $mdpConfirmation === ""){
+        echo json_encode([
+            "success" => false,
+            "message" => "Tous les champs sont obligatoires."
+        ]);
+        return;
+    }
+
+    $verificationMdp = verifierComplexiterMdp($mdp);
+    if($verificationMdp !== true){
+        echo json_encode([
+            "success" => false,
+            "message" => $verificationMdp
+        ]);
+        return;
+    }
+
+    if($mdp !== $mdpConfirmation){
+        echo json_encode([
+            "success" => false,
+            "message" => "Les mots de passe ne correspondent pas."
+        ]);
+        return;
+    }
+
+    $rolesAcceptes = ["user", "admin", "owner"];
+
+    if(!in_array($role, $rolesAcceptes)){
+        echo json_encode([
+            "success" => false,
+            "message" => "Rôle invalide. Les rôles acceptés sont : user, admin, owner."
+        ]);
+        return;
+    }
+
+    $mdpHash = password_hash($mdp, PASSWORD_DEFAULT);
+
+    try{
+        $req = $pdo->prepare("
+            insert into utilisateur
+            (nomUtilisateur, prenomUtilisateur, role, login, mdp)
+            values
+            (?, ?, ?, ?, ?)
+        ");
+
+        $req->execute([
+            $nomUtilisateur,
+            $prenomUtilisateur,
+            $role,
+            $login,
+            $mdpHash
+        ]);
+
+        echo json_encode([
+            "success" => true,
+            "message" => "Utilisateur ajouté avec succès."
+        ]);
+    } catch(PDOException $e){
+        if($e->getCode() === "23000"){
+            echo json_encode([
+                "success" => false,
+                "message" => "Ce login est déjà utilisé par un autre utilisateur."
+            ]);
+        } else {
+            echo json_encode([
+                "success" => false,
+                "message" => "Erreur lors de l'ajout de l'utilisateur : " . $e->getMessage()
+            ]);
+        }
+    }
+}
+
+/*********************************
+ * FONCTION : getUtilisateurById *
+ *********************************/
+function getUtilisateurById($pdo){
+    if(!isset($_SESSION['idUtilisateur']) || $_SESSION['role'] !== 'admin'){
+        echo json_encode([
+            "success" => false,
+            "message" => "Accès réservé à l'administrateur."
+        ]);
+        return;
+    }
+
+    $idUtilisateur = $_POST['idUtilisateur'] ?? "";
+
+    $req = $pdo->prepare("
+        select idUtilisateur, nomUtilisateur, prenomUtilisateur, role, login
+        from utilisateur
+        where idUtilisateur = ?
+    ");
+
+    $req->execute([$idUtilisateur]);
+
+    $utilisateur = $req->fetch(PDO::FETCH_ASSOC);
+
+    if(!$utilisateur){
+        echo json_encode([
+            "success" => false,
+            "message" => "Utilisateur introuvable."
+        ]);
+        return;
+    }
+
+    echo json_encode([
+        "success" => true,
+        "utilisateur" => $utilisateur
+    ]);
+
+}
+
+/********************************
+ * FONCTION : updateUtilisateur *
+ *********************************/
+function updateUtilisateur($pdo){
+
+    if(!isset($_SESSION['idUtilisateur']) || $_SESSION['role'] !== 'admin'){
+        echo json_encode([
+            "success" => false,
+            "message" => "Accès réservé à l'administrateur."
+        ]);
+        return;
+    }
+
+    $idUtilisateur = $_POST['idUtilisateur'] ?? "";
+    $nomUtilisateur = $_POST['nomUtilisateur'] ?? "";
+    $prenomUtilisateur = $_POST['prenomUtilisateur'] ?? "";
+    $login = $_POST['login'] ?? "";
+    $mdp = $_POST['mdp'] ?? "";
+    $mdpConfirmation = $_POST['mdpConfirmation'] ?? "";
+    $role = $_POST['role'] ?? "user";
+
+    if($nomUtilisateur === "" || $prenomUtilisateur === "" || $login === "" || $role === ""){
+        echo json_encode([
+            "success" => false,
+            "message" => "Tous les champs sont obligatoires, sauf le mot de passe."
+        ]);
+        return;
+    }
+
+    $rolesAcceptes = ["user", "admin", "owner"];
+
+    if(!in_array($role, $rolesAcceptes)){
+        echo json_encode([
+            "success" => false,
+            "message" => "Rôle invalide. Les rôles acceptés sont : user, admin, owner."
+        ]);
+        return;
+    }
+
+    if($mdp !== "" && $mdp !== $mdpConfirmation){
+        echo json_encode([
+            "success" => false,
+            "message" => "Les mots de passe ne correspondent pas."
+        ]);
+        return;
+    }
+
+    try{
+        if($mdp !== ""){
+
+            $verificationMdp = verifierComplexiterMdp($mdp);
+            if($verificationMdp !== true){
+                echo json_encode([
+                    "success" => false,
+                    "message" => $verificationMdp
+                ]);
+                return;
+            }
+
+            $mdpHash = password_hash($mdp, PASSWORD_DEFAULT);
+            $req = $pdo->prepare("
+                update utilisateur
+                set nomUtilisateur = ?,
+                    prenomUtilisateur = ?,
+                    role = ?,
+                    login = ?,
+                    mdp = ?
+                where idUtilisateur = ?
+            ");
+
+            $req->execute([
+                $nomUtilisateur,
+                $prenomUtilisateur,
+                $role,
+                $login,
+                $mdpHash,
+                $idUtilisateur
+            ]);
+        } else {
+            $req = $pdo->prepare("
+                update utilisateur
+                set nomUtilisateur = ?,
+                    prenomUtilisateur = ?,
+                    role = ?,
+                    login = ?
+                where idUtilisateur = ?
+            ");
+
+            $req->execute([
+                $nomUtilisateur,
+                $prenomUtilisateur,
+                $role,
+                $login,
+                $idUtilisateur
+            ]);
+        }
+
+        echo json_encode([
+            "success" => true,
+            "message" => "Utilisateur modifié avec succès."
+        ]);
+    } catch(PDOException $e){
+        if($e->getCode() === "23000"){
+            echo json_encode([
+                "success" => false,
+                "message" => "Ce login est déjà utilisé par un autre utilisateur."
+            ]);
+        } else {
+            echo json_encode([
+                "success" => false,
+                "message" => "Erreur lors de la modification de l'utilisateur : " . $e->getMessage()
+            ]);
+        }
+    }
+}
+
+/******************************
+ * FONCTION : deleteUtilisateur *
+ ******************************/
+function deleteUtilisateur($pdo){
+
+    if(!isset($_SESSION['idUtilisateur']) || $_SESSION['role'] !== 'admin'){
+        echo json_encode([
+            "success" => false,
+            "message" => "Accès réservé à l'administrateur."
+        ]);
+        return;
+    }
+
+    $idUtilisateur = $_POST['idUtilisateur'] ?? "";
+
+    if($idUtilisateur === ""){
+        echo json_encode([
+            "success" => false,
+            "message" => "ID utilisateur manquant."
+        ]);
+        return;
+    }
+
+    if($_SESSION['idUtilisateur'] == $_POST['idUtilisateur']){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous ne pouvez pas supprimer votre propre compte."
+        ]);
+        return;
+    }
+
+    try{
+        $req =$pdo->prepare("
+            delete from utilisateur
+            where idUtilisateur = ?
+        ");
+
+        $req->execute([$idUtilisateur]);
+
+        if($req->rowCount() > 0){
+            echo json_encode([
+                "success" => true,
+                "message" => "Utilisateur supprimé avec succès."
+            ]);
+        } else {
+            echo json_encode([
+                "success" => false,
+                "message" => "Utilisateur introuvable."
+            ]);
+        }
+    }
+    // Catch va récup l'erreur si on supp un utilisateur qui a des objet grace au ondelete en cascade dans la bdd, et on affiche un message d'erreur plus clair pour l'utilisateur 
+    catch(PDOException $e){
+        if($e->getCode() === "23000"){
+            echo json_encode([
+                "success" => false,
+                "message" => "Impossible de supprimer cet utilisateur car il possède des objets liés ou des prêts encore en cours ."
+            ]);
+        } else {
+            echo json_encode([
+                "success" => false,
+                "message" => "Erreur lors de la suppression de l'utilisateur : " . $e->getMessage()
+            ]);
+        }
+    }
+}
+
+/******************************************************************
+ * FONCTION : getMesPrets                                         *
+ * Permet à un utilisateur de voir la liste de ses prêts en cours *
+ ******************************************************************/
+function getMesPrets($pdo){
+
+    if(!isset($_SESSION['idUtilisateur'])){
+        echo json_encode([
+            "success" => false,
+            "message" => "Vous devez être connecté."
+        ]);
+        return;
+    }
+
+    $idUtilisateur = $_SESSION['idUtilisateur'];
+
+    $req = $pdo->prepare("
+        select
+            pret.idPret,
+            pret.datePret,
+            pret.dateRetourPrevue,
+            pret.dateRetourReelle,
+            pret.commentaire,
+            categorie.nom as nomCategorie,
+
+            objet.nom as nomObjet,
+
+            utilisateur.nomUtilisateur,
+            utilisateur.prenomUtilisateur
+
+        from pret
+
+        inner join objet
+            on pret.idObjet = objet.idObjet
+        
+        inner join utilisateur
+            on pret.idUtilisateur = utilisateur.idUtilisateur
+
+        inner join categorie
+            on objet.idCategorie = categorie.idCategorie
+
+        WHERE pret.dateRetourReelle IS NULL
+        AND pret.idUtilisateur = ?
+        
+        order by pret.datePret desc
+    ");
+
+    $req->execute([$idUtilisateur]);
+
+    $prets = $req->fetchAll(PDO::FETCH_ASSOC);
+
+    if(count($prets) !== 0){
+        echo json_encode([
+            "success" => true,
+            "prets" => $prets
+        ]);
+        return;
+    }
+
+    if(count($prets) === 0){
+        echo json_encode([
+            "success" => false,
+            "message" => "Aucun prêt trouvé."
+        ]);
+        return;
+    }
+}
+
+/************************************
+ * FUNCTION : verifierComplexiteMDP *
+ * - min 8 caractères               *
+ * - au moins une majuscule         *
+ * - au moins une minuscule         *
+ * - au moins un chiffre            *
+ * - au moins un caractère spécial  *
+ ************************************/
+function verifierComplexiterMdp($mdp){
+
+    if(strlen($mdp) < 8){
+        return "Le mot de passe doit contenir au moins 8 caractères.";
+    }
+
+    if(!preg_match('/[A-Z]/', $mdp)){
+        return "Le mot de passe doit contenir au moins une lettre majuscule.";
+    }
+
+    if(!preg_match('/[a-z]/', $mdp)){
+        return "Le mot de passe doit contenir au moins une lettre minuscule.";
+    }
+
+    if(!preg_match('/[0-9]/', $mdp)){
+        return "Le mot de passe doit contenir au moins un chiffre.";
+    }
+
+    if(!preg_match('/[^A-Za-z0-9]/', $mdp)){
+        return "Le mot de passe doit contenir au moins un caractère spécial.";
+    }
+
+    return true;
+}
+
+/***********************************
+ * FONCTION : getStatistiquesAdmin *
+ ***********************************/
+function getStatistiquesAdmin($pdo){
+    if(!isset($_SESSION['idUtilisateur']) || $_SESSION['role'] !== 'admin'){
+        echo json_encode([
+            "success" => false,
+            "message" => "Accès réservé à l'administrateur."
+        ]);
+        return;
+    }
+
+    $stats = [];
+
+    $req = $pdo->prepare("
+        select
+            (select count(*) 
+            from objet) as nbObjets,
+
+            (select count(*)
+            from objet
+            where statut = 'disponible') as nbObjetsDisponibles,
+
+            (select count(*)
+            from objet
+            where statut = 'prêté') as nbObjetsPretes,
+
+            (select count(*)
+            from pret
+            where dateRetourReelle is null) as nbPretsEnCours,
+
+            (select count(*)
+            from utilisateur) as nbUtilisateurs
+    ");
+    $req->execute();
+    $stats = $req->fetch(PDO::FETCH_ASSOC);
+
+    echo json_encode([
+        "success" => true,
+        "stats" => $stats
     ]);
 }
 ?>
